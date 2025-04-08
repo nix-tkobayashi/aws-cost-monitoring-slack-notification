@@ -1,0 +1,19 @@
+# プロジェクト名（デフォルト値: "aws-cost-watcher"）
+project = "aws-cost-watcher"
+
+# SlackのチャンネルID（必須）
+# 例: C0123456789
+slack_channel_id = "YOUR_SLACK_CHANNEL_ID"
+
+# SlackのワークスペースID（必須）
+# 例: T0123456789
+slack_workspace_id = "YOUR_SLACK_WORKSPACE_ID"
+
+# コストのしきい値（USD）（デフォルト値: 10）
+# この値を超えると警告メッセージが表示されます
+angry_threshold = 10
+
+# バッチ実行設定
+batch_schedule = "cron(00 10 * * ? *)"  # 毎日10:00に実行
+batch_timezone = "Japan"                # 日本時間
+cost_lookback_days = 7                  # 過去7日間のコストを取得 
