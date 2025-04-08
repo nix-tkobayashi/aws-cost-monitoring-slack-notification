@@ -27,4 +27,7 @@ terraform.rc
 .idea/
 .vscode/
 *.swp
-*.swo 
+*.swo
+
+# Ignore lock file
+.terraform.lock.hcl 
