@@ -1,0 +1,8 @@
+aws_region        = "ap-northeast-1"
+project           = "aws-cost-watcher"
+slack_channel_id  = "C0123456789"
+slack_workspace_id = "T0123456789"
+cost_lookback_days = 7
+angry_threshold    = 100
+batch_schedule     = "cron(0 9 ? * MON-FRI *)"
+batch_timezone     = "Asia/Tokyo" 

@@ -1,92 +1,48 @@
-# AWS Cost Monitoring Slack Notification
+# AWSコスト監視くん
 
-AWSのコストを監視し、Slackに通知するシステムです。毎日指定した時間に、過去X日間のAWSコストを取得し、Slackチャンネルに通知します。
+AWSのコストを監視し、Slackに通知するTerraformモジュールです。
 
 ## 機能
 
-- 指定した時間に自動実行
-- 過去X日間のAWSコストを取得
-- サービスごとのコスト内訳を表示
-- コストがしきい値を超えた場合に警告メッセージを表示
-- Slackへの通知
+- AWSのコストを定期的に確認
+- コストが閾値を超えた場合、Slackに通知
+- コストの内訳をサービスごとに表示
+- カスタマイズ可能なスケジュール設定
 
-## アーキテクチャ
+## モジュール構造
 
-```mermaid
-graph TD
-    A[EventBridge Scheduler] --> B[Step Functions]
-    B --> C[Cost Explorer API]
-    C --> D[SNS Topic]
-    D --> E[Slack via AWS Chatbot]
+```
+.
+├── modules/
+│   └── cost-watcher/     # コスト監視モジュール
+│       ├── main.tf       # メインのリソース定義
+│       ├── variables.tf  # 変数定義
+│       └── outputs.tf    # 出力定義
+└── examples/
+    └── basic/           # 基本的な使用例
+        ├── main.tf      # モジュールの使用例
+        ├── variables.tf # 変数定義
+        └── README.md    # 使用例の説明
 ```
 
-## 必要条件
+## 使用方法
 
-- AWSアカウント
-- Slackワークスペース
-- AWS Chatbotの設定済みSlackチャンネル
+基本的な使用例については、[examples/basic/README.md](examples/basic/README.md)を参照してください。
 
-## セットアップ
+## 必要な権限
 
-1. リポジトリをクローン
-```bash
-git clone https://github.com/nix-tkobayashi/aws-cost-monitoring-slack-notification.git
-cd aws-cost-monitoring-slack-notification
-```
+このモジュールを使用するには、以下のAWS権限が必要です：
 
-2. `terraform.tfvars`の作成
-```bash
-cp terraform.tfvars.example terraform.tfvars
-```
-
-3. `terraform.tfvars`の編集
-- `slack_channel_id`: SlackチャンネルID
-- `slack_workspace_id`: SlackワークスペースID
-- その他の設定値は必要に応じて変更
-
-4. Terraformの実行
-```bash
-terraform init
-terraform plan
-terraform apply
-```
-
-## 設定可能なパラメータ
-
-| パラメータ名 | 説明 | デフォルト値 |
-|------------|------|------------|
-| project | プロジェクト名 | aws-cost-watcher |
-| slack_channel_id | SlackチャンネルID | - |
-| slack_workspace_id | SlackワークスペースID | - |
-| angry_threshold | コスト警告のしきい値（USD） | 10 |
-| batch_schedule | バッチ実行スケジュール（cron形式） | cron(00 10 * * ? *) |
-| batch_timezone | バッチ実行のタイムゾーン | Japan |
-| cost_lookback_days | コスト取得の過去日数 | 7 |
-
-## 通知内容
-
-- 合計コスト
-- サービスごとのコスト（上位5サービス）
-- コストがしきい値を超えた場合の警告メッセージ
-
-## セキュリティ
-
-- SlackのチャンネルIDとワークスペースIDは機密情報として扱われます
-- `terraform.tfvars`は`.gitignore`に追加されています
-
-## 謝辞
-
-このプロジェクトは、以下の記事を参考に作成されました：
-- [AWS Step Functions(JSONata)でAWS料金をSlackへ通知【Lambda無し】](https://dev.classmethod.jp/articles/aws-cost-watcher-with-sfn-jsonata/)
-
-## ライセンス
-
-MIT License
+- Cost Explorerの読み取り権限
+- SNSトピックの作成・管理権限
+- Step Functionsの作成・管理権限
+- EventBridge Schedulerの作成・管理権限
+- IAMロール・ポリシーの作成・管理権限
 
 ## 作者
 
 [nix-tkobayashi](https://github.com/nix-tkobayashi)
 
-## 貢献
+## ライセンス
 
-プルリクエストやイシューは歓迎します。
+MITライセンスの下で公開されています。詳細は[LICENSE](LICENSE)を参照してください。

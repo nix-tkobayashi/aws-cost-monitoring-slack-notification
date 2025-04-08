@@ -125,7 +125,7 @@ resource "aws_sfn_state_machine" "cost_watcher" {
           Granularity = "MONTHLY"
           Metrics     = ["UnblendedCost"]
           TimePeriod = {
-            Start = "$${($millis() - 86400000 * ${var.cost_lookback_days}) ~> $fromMillis('[Y0001]-[M01]-[D01]')}"
+            Start = "$${($millis() - 86400000 * $LookbackDays) ~> $fromMillis('[Y0001]-[M01]-[D01]')}"
             End   = "$${$millis() ~> $fromMillis('[Y0001]-[M01]-[D01]')}"
           }
           GroupBy = [{
@@ -147,7 +147,12 @@ resource "aws_sfn_state_machine" "cost_watcher" {
         }
         Assign = {
           AngryThreshold = var.angry_threshold
+          LookbackDays   = var.cost_lookback_days
         }
+        Catch = [{
+          ErrorEquals = ["States.ALL"]
+          Next        = "ErrorHandler"
+        }]
         Next = "SNS Publish"
       }
       "SNS Publish" = {
@@ -160,7 +165,28 @@ resource "aws_sfn_state_machine" "cost_watcher" {
             content = {
               textType    = "client-markdown"
               title       = "$${$states.input.CostSum > $AngryThreshold ? ':serious_face_with_symbols_covering_mouth: コスト監視くんはお怒りです' : ':simple_smile: コスト監視くんは平常心を保っています'}"
-              description = "$${'ここ${var.cost_lookback_days}日間のコストは ' & $string($states.input.CostSum) & ' USD です。' & '\n' & '\n:one: ' & ($states.input.CostSorted[0].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[0].Total & ' USD' & '\n:two: ' & ($states.input.CostSorted[1].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[1].Total & ' USD' & '\n:three: ' & ($states.input.CostSorted[2].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[2].Total & ' USD' & '\n:four: ' & ($states.input.CostSorted[3].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[3].Total & ' USD' & '\n:five: ' & ($states.input.CostSorted[4].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[4].Total & ' USD'}"
+              description = "$${'ここ' & $string($LookbackDays) & '日間のコストは ' & $string($states.input.CostSum) & ' USD です。' & '\n' & '\n:one: ' & ($states.input.CostSorted[0].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[0].Total & ' USD' & '\n:two: ' & ($states.input.CostSorted[1].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[1].Total & ' USD' & '\n:three: ' & ($states.input.CostSorted[2].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[2].Total & ' USD' & '\n:four: ' & ($states.input.CostSorted[3].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[3].Total & ' USD' & '\n:five: ' & ($states.input.CostSorted[4].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[4].Total & ' USD'}"
+            }
+          }
+          TopicArn = aws_sns_topic.cost_watcher.arn
+        }
+        Catch = [{
+          ErrorEquals = ["States.ALL"]
+          Next        = "ErrorHandler"
+        }]
+        End = true
+      }
+      ErrorHandler = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::sns:publish"
+        Parameters = {
+          Message = {
+            version = "1.0"
+            source  = "custom"
+            content = {
+              textType    = "client-markdown"
+              title       = ":warning: コスト監視くんがエラーを検出しました"
+              description = "$${'エラーが発生しました: ' & $string($.Error)}"
             }
           }
           TopicArn = aws_sns_topic.cost_watcher.arn
