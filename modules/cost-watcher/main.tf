@@ -1,12 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
 # SNSトピック
 resource "aws_sns_topic" "cost_watcher" {
   name = var.project
@@ -115,23 +106,14 @@ resource "aws_sfn_state_machine" "cost_watcher" {
   role_arn = aws_iam_role.step_functions.arn
 
   definition = jsonencode({
-    Comment = "A description of my state machine"
-    StartAt = "GetCostAndUsage"
+    Comment       = "A description of my state machine"
+    QueryLanguage = "JSONata"
+    StartAt       = "GetCostAndUsage"
     States = {
       GetCostAndUsage = {
         Type     = "Task"
         Resource = "arn:aws:states:::aws-sdk:costexplorer:getCostAndUsage"
-        Parameters = {
-          Granularity = "MONTHLY"
-          Metrics     = ["UnblendedCost"]
-          TimePeriod = {
-            Start = "$${($millis() - 86400000 * $LookbackDays) ~> $fromMillis('[Y0001]-[M01]-[D01]')}"
-            End   = "$${$millis() ~> $fromMillis('[Y0001]-[M01]-[D01]')}"
-          }
-          GroupBy = [{
-            Key  = "SERVICE"
-            Type = "DIMENSION"
-          }]
+        Arguments = {
           Filter = {
             Not = {
               Dimensions = {
@@ -140,53 +122,37 @@ resource "aws_sfn_state_machine" "cost_watcher" {
               }
             }
           }
-        }
-        Output = {
-          CostSum    = "$${$states.result.ResultsByTime[].Groups[].Metrics.UnblendedCost.Amount.$number() ~> $sum() ~> $round(1)}"
-          CostSorted = "$${($all_entries := $map($zip($states.result.ResultsByTime[].Groups[].Keys[0], $states.result.ResultsByTime[].Groups[].Metrics.UnblendedCost.Amount.$number()), function($v) { {'Service': $v[0], 'Amount': $v[1]} }); $services := $all_entries.Service ~> $distinct(); $cost_per_service := $map($services, function($s){ {'Service': $s, 'Total': $all_entries[Service=$s].Amount ~> $sum() ~> $round(1)} }); $sort($cost_per_service, function($l, $r){ $l.Total < $r.Total }))}"
+          Granularity = "MONTHLY"
+          GroupBy = [{
+            Key  = "SERVICE"
+            Type = "DIMENSION"
+          }]
+          Metrics = ["UnblendedCost"]
+          TimePeriod = {
+            End   = "{% $millis() ~> $fromMillis('[Y0001]-[M01]-[D01]') %}"
+            Start = "{% ($millis() - 86400000 * 7) ~> $fromMillis('[Y0001]-[M01]-[D01]') %}"
+          }
         }
         Assign = {
-          AngryThreshold = var.angry_threshold
-          LookbackDays   = var.cost_lookback_days
+          AngryThreshold = 10
         }
-        Catch = [{
-          ErrorEquals = ["States.ALL"]
-          Next        = "ErrorHandler"
-        }]
         Next = "SNS Publish"
+        Output = {
+          CostSorted = "{% ($all_entries := $map($zip($states.result.ResultsByTime[].Groups[].Keys[0], $states.result.ResultsByTime[].Groups[].Metrics.UnblendedCost.Amount.$number()), function($v) { {\"Service\": $v[0], \"Amount\": $v[1]} }); $services := $all_entries.Service ~> $distinct(); $cost_per_service := $map($services, function($s){ {\"Service\": $s, \"Total\": $all_entries[Service=$s].Amount ~> $sum() ~> $round(1)} }); $sort($cost_per_service, function($l, $r){ $l.Total < $r.Total })) %}"
+          CostSum    = "{% $states.result.ResultsByTime[].Groups[].Metrics.UnblendedCost.Amount.$number() ~> $sum() ~> $round(1) %}"
+        }
       }
       "SNS Publish" = {
         Type     = "Task"
         Resource = "arn:aws:states:::sns:publish"
-        Parameters = {
+        Arguments = {
           Message = {
             version = "1.0"
             source  = "custom"
             content = {
               textType    = "client-markdown"
-              title       = "$${$states.input.CostSum > $AngryThreshold ? ':serious_face_with_symbols_covering_mouth: コスト監視くんはお怒りです' : ':simple_smile: コスト監視くんは平常心を保っています'}"
-              description = "$${'ここ' & $string($LookbackDays) & '日間のコストは ' & $string($states.input.CostSum) & ' USD です。' & '\n' & '\n:one: ' & ($states.input.CostSorted[0].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[0].Total & ' USD' & '\n:two: ' & ($states.input.CostSorted[1].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[1].Total & ' USD' & '\n:three: ' & ($states.input.CostSorted[2].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[2].Total & ' USD' & '\n:four: ' & ($states.input.CostSorted[3].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[3].Total & ' USD' & '\n:five: ' & ($states.input.CostSorted[4].Service ~> $replace(/^(AWS|Amazon)\\s*/,'')) & ': ' & $states.input.CostSorted[4].Total & ' USD'}"
-            }
-          }
-          TopicArn = aws_sns_topic.cost_watcher.arn
-        }
-        Catch = [{
-          ErrorEquals = ["States.ALL"]
-          Next        = "ErrorHandler"
-        }]
-        End = true
-      }
-      ErrorHandler = {
-        Type     = "Task"
-        Resource = "arn:aws:states:::sns:publish"
-        Parameters = {
-          Message = {
-            version = "1.0"
-            source  = "custom"
-            content = {
-              textType    = "client-markdown"
-              title       = ":warning: コスト監視くんがエラーを検出しました"
-              description = "$${'エラーが発生しました: ' & $string($.Error)}"
+              title       = "{% $states.input.CostSum > $AngryThreshold ? \":serious_face_with_symbols_covering_mouth: コスト監視くんはお怒りです\" : \":simple_smile: コスト監視くんは平常心を保っています\" %}"
+              description = "{% \"ここ1週間ぐらいのコストは \" & $string($states.input.CostSum) & \" USD です。\" & \"\\n\" & \"\\n:one: \" & ( $states.input.CostSorted[0].Service ~> $replace(/^(AWS|Amazon)\\s*/,\"\") ) & \": \" & $states.input.CostSorted[0].Total & \" USD\" & \"\\n:two: \" & ( $states.input.CostSorted[1].Service ~> $replace(/^(AWS|Amazon)\\s*/,\"\") ) & \": \" & $states.input.CostSorted[1].Total & \" USD\" & \"\\n:three: \" & ( $states.input.CostSorted[2].Service ~> $replace(/^(AWS|Amazon)\\s*/,\"\") ) & \": \" & $states.input.CostSorted[2].Total & \" USD\" & \"\\n:four: \" & ( $states.input.CostSorted[3].Service ~> $replace(/^(AWS|Amazon)\\s*/,\"\") ) & \": \" & $states.input.CostSorted[3].Total & \" USD\" & \"\\n:five: \" & ( $states.input.CostSorted[4].Service ~> $replace(/^(AWS|Amazon)\\s*/,\"\") ) & \": \" & $states.input.CostSorted[4].Total & \" USD\" %}"
             }
           }
           TopicArn = aws_sns_topic.cost_watcher.arn
@@ -244,4 +210,4 @@ resource "aws_scheduler_schedule" "cost_watcher" {
     arn      = aws_sfn_state_machine.cost_watcher.arn
     role_arn = aws_iam_role.scheduler.arn
   }
-} 
+}

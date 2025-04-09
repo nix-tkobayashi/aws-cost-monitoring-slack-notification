@@ -27,8 +27,6 @@ AWSのコストを監視し、Slackに通知するTerraformモジュールです
 
 ## 使用方法
 
-### モジュールとして使用する場合
-
 1. リポジトリをクローンします：
 ```bash
 git clone https://github.com/nix-tkobayashi/aws-cost-monitoring-slack-notification.git
@@ -52,35 +50,6 @@ module "cost_watcher" {
 ```
 
 3. 必要な変数を設定します：
-   - `project`: プロジェクト名
-   - `slack_channel_id`: SlackチャンネルID
-   - `slack_workspace_id`: SlackワークスペースID
-   - `cost_lookback_days`: コストを確認する日数（デフォルト: 7）
-   - `angry_threshold`: コスト監視くんが怒る閾値（USD）（デフォルト: 100）
-   - `batch_schedule`: コスト確認のスケジュール（cron形式）（デフォルト: 平日9:00）
-   - `batch_timezone`: スケジュールのタイムゾーン（デフォルト: Asia/Tokyo）
-
-4. Terraformを実行します：
-```bash
-terraform init
-terraform plan
-terraform apply
-```
-
-### モジュールを使用しない場合
-
-1. リポジトリをクローンします：
-```bash
-git clone https://github.com/nix-tkobayashi/aws-cost-monitoring-slack-notification.git
-cd aws-cost-monitoring-slack-notification
-```
-
-2. `terraform.tfvars.example`を`terraform.tfvars`にコピーし、必要な値を設定します：
-```bash
-cp terraform.tfvars.example terraform.tfvars
-```
-
-3. 以下の値を設定します：
    - `project`: プロジェクト名
    - `slack_channel_id`: SlackチャンネルID
    - `slack_workspace_id`: SlackワークスペースID
